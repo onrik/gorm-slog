@@ -5,12 +5,6 @@ Logger for gorm based on log/slog.
 package main
 
 import (
-	"gorm.io/gorm"
-    "gorm.io/driver/sqlite"
-    "github.com/onrik/gorm-slog"
-)
-
-import (
     "gorm.io/gorm"
     "gorm.io/driver/sqlite"
     "github.com/onrik/gorm-logrus"
