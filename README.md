@@ -7,7 +7,7 @@ package main
 import (
     "gorm.io/gorm"
     "gorm.io/driver/sqlite"
-    "github.com/onrik/gorm-logrus"
+    "github.com/onrik/gorm-slog"
 )
 
 func main() {
