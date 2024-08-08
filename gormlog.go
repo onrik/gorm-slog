@@ -5,28 +5,36 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
+	"gorm.io/gorm/utils"
 )
 
 type Logger struct {
 	logger                *slog.Logger
 	SlowThreshold         time.Duration
-	SourceField           string
 	SkipErrRecordNotFound bool
+	SkipErrContexCanceled bool
 	Debug                 bool
+	MsgFormatter          func(sql string, elapsed time.Duration, source string) string
 }
 
 func New(logger *slog.Logger) *Logger {
 	if logger == nil {
 		logger = slog.Default()
 	}
+
 	return &Logger{
 		logger:                logger,
 		SkipErrRecordNotFound: true,
+		SkipErrContexCanceled: true,
 		Debug:                 true,
+		MsgFormatter: func(sql string, elapsed time.Duration, source string) string {
+			return fmt.Sprintf("%s [%s] %s", sql, elapsed, source)
+		},
 	}
 }
 
@@ -48,18 +56,42 @@ func (l *Logger) Error(ctx context.Context, s string, args ...interface{}) {
 
 func (l *Logger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
 	elapsed := time.Since(begin)
+	source := sourceShort(utils.FileWithLineNum())
 	sql, _ := fc()
+	msg := l.MsgFormatter(sql, elapsed, source)
 	if err != nil && !(errors.Is(err, gorm.ErrRecordNotFound) && l.SkipErrRecordNotFound) {
-		l.logger.With("error", err).ErrorContext(ctx, fmt.Sprintf("%s [%s]", sql, elapsed))
+		l.logger.With("error", err).ErrorContext(ctx, msg)
+		return
+	}
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) && l.SkipErrRecordNotFound {
+			return
+		}
+
+		if errors.Is(err, context.Canceled) && !l.SkipErrContexCanceled {
+			return
+		}
+
+		l.logger.ErrorContext(ctx, msg, "error", err)
 		return
 	}
 
 	if l.SlowThreshold != 0 && elapsed > l.SlowThreshold {
-		l.logger.WarnContext(ctx, fmt.Sprintf("%s [%s]", sql, elapsed))
+		l.logger.WarnContext(ctx, msg)
 		return
 	}
 
 	if l.Debug {
-		l.logger.DebugContext(ctx, fmt.Sprintf("%s [%s]", sql, elapsed))
+		l.logger.DebugContext(ctx, msg)
 	}
+}
+
+func sourceShort(s string) string {
+	parts := strings.Split(s, "/")
+	if len(parts) <= 2 {
+		return s
+	}
+
+	return strings.Join(parts[len(parts)-2:], "/")
 }
