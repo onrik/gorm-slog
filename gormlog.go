@@ -13,8 +13,15 @@ import (
 	"gorm.io/gorm/utils"
 )
 
+type Slog interface {
+	DebugContext(ctx context.Context, msg string, args ...any)
+	InfoContext(ctx context.Context, msg string, args ...any)
+	WarnContext(ctx context.Context, msg string, args ...any)
+	ErrorContext(ctx context.Context, msg string, args ...any)
+}
+
 type Logger struct {
-	logger                *slog.Logger
+	logger                Slog
 	SlowThreshold         time.Duration
 	SkipErrRecordNotFound bool
 	SkipErrContexCanceled bool
@@ -22,7 +29,7 @@ type Logger struct {
 	MsgFormatter          func(sql string, elapsed time.Duration, source string) string
 }
 
-func New(logger *slog.Logger) *Logger {
+func New(logger Slog) *Logger {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -59,10 +66,6 @@ func (l *Logger) Trace(ctx context.Context, begin time.Time, fc func() (string, 
 	source := sourceShort(utils.FileWithLineNum())
 	sql, _ := fc()
 	msg := l.MsgFormatter(sql, elapsed, source)
-	if err != nil && !(errors.Is(err, gorm.ErrRecordNotFound) && l.SkipErrRecordNotFound) {
-		l.logger.With("error", err).ErrorContext(ctx, msg)
-		return
-	}
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) && l.SkipErrRecordNotFound {
