@@ -72,7 +72,7 @@ func (l *Logger) Trace(ctx context.Context, begin time.Time, fc func() (string, 
 			return
 		}
 
-		if errors.Is(err, context.Canceled) && !l.SkipErrContexCanceled {
+		if errors.Is(err, context.Canceled) && l.SkipErrContexCanceled {
 			return
 		}
 
