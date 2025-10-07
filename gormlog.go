@@ -26,7 +26,7 @@ type Logger struct {
 	SkipErrRecordNotFound bool
 	SkipErrContexCanceled bool
 	Debug                 bool
-	MsgFormatter          func(sql string, elapsed time.Duration, source string) string
+	MsgFormatter          func(sql string, elapsed time.Duration, source string) (string, []any)
 }
 
 func New(logger Slog) *Logger {
@@ -39,8 +39,10 @@ func New(logger Slog) *Logger {
 		SkipErrRecordNotFound: true,
 		SkipErrContexCanceled: true,
 		Debug:                 true,
-		MsgFormatter: func(sql string, elapsed time.Duration, source string) string {
-			return fmt.Sprintf("%s [%s] %s", sql, elapsed, source)
+		MsgFormatter: func(sql string, elapsed time.Duration, source string) (string, []any) {
+			args := []any{"duration", elapsed, "sql", sql}
+			msg := strings.SplitN(sql, " ", 2)[0] // For Sentry
+			return fmt.Sprintf("GORM %s [%s]", msg, source), args
 		},
 	}
 }
@@ -65,7 +67,7 @@ func (l *Logger) Trace(ctx context.Context, begin time.Time, fc func() (string, 
 	elapsed := time.Since(begin)
 	source := sourceShort(utils.FileWithLineNum())
 	sql, _ := fc()
-	msg := l.MsgFormatter(sql, elapsed, source)
+	msg, args := l.MsgFormatter(sql, elapsed, source)
 
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) && l.SkipErrRecordNotFound {
@@ -76,8 +78,10 @@ func (l *Logger) Trace(ctx context.Context, begin time.Time, fc func() (string, 
 			return
 		}
 
-		l.logger.ErrorContext(ctx, msg, "error", err)
+		args = append(args, "error", err)
+		l.logger.ErrorContext(ctx, msg, args...)
 		return
+
 	}
 
 	if l.SlowThreshold != 0 && elapsed > l.SlowThreshold {
