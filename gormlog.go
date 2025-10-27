@@ -85,12 +85,12 @@ func (l *Logger) Trace(ctx context.Context, begin time.Time, fc func() (string, 
 	}
 
 	if l.SlowThreshold != 0 && elapsed > l.SlowThreshold {
-		l.logger.WarnContext(ctx, msg)
+		l.logger.WarnContext(ctx, msg, args...)
 		return
 	}
 
 	if l.Debug {
-		l.logger.DebugContext(ctx, msg)
+		l.logger.DebugContext(ctx, msg, args...)
 	}
 }
 
